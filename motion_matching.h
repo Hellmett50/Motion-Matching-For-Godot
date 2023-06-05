@@ -2,8 +2,8 @@
 #define MOTION_MATCHING_H
 
 #include "scene/main/node.h"
-#include "core/class_db.h"
-#include "core/vector.h"
+#include "core/object/class_db.h"
+#include "core/templates/vector.h"
 #include "mm_math/mm_data_types.h"
 #include "scene/resources/animation.h"
 #include "mm_math/mm_math.h"
@@ -50,7 +50,8 @@ protected:
     // Animation Status
     motion_matching::FeatureVector current_feature_vector;
     motion_matching::FeatureVector goal;
-    Vector<motion_matching::JointData> offset_pose_array;
+	Vector<float> goal_traj;
+	Vector<motion_matching::JointData> offset_pose_array;
     String cur_anim_name;
     float cur_anim_time;
     bool should_blend = false;
@@ -68,10 +69,10 @@ protected:
     static constexpr float anim_blend_time = .4f;
     static constexpr float blend_halflife = .1f;
 
-    class KinematicBody* parent;
-    class Skeleton* skeleton = nullptr;
+    class Node3D *parent;
+    class Skeleton3D* skeleton = nullptr;
 
-    void flip_flop(Ref<Animation> animation, float anim_pos);
+	void flip_flop(Ref<Animation> animation, float anim_pos);
 
     void generate_skeleton_map() const;
 
@@ -93,6 +94,7 @@ protected:
     Vector<motion_matching::JointData> calculate_pose_array(int index, float time_offset) const;
     Vector<motion_matching::JointData> calculate_pose_array(Ref<Animation> animation, float position) const;
 
+    //int find_best_match_index(Vector<float>& cfv, float delta);
     int find_best_match_index(Vector<float>& cfv, float delta);
 
     /**
@@ -140,11 +142,13 @@ public:
     float get_speed_scale() const;
     void set_speed_scale(float new_speed_scale);
 
-    void anim_update(float delta);
-    void process_animation();
+    void anim_play(float delta);
+
+	void anim_update(float delta);
+	void process_animation();
     void set_goal(const Variant& trajectory);
     
-    static String to_string(const Quat& quat);
+    static String to_string(const Quaternion& quat);
     static String to_string(const Vector3& vec);
 };
 
