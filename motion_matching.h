@@ -142,8 +142,6 @@ public:
     float get_speed_scale() const;
     void set_speed_scale(float new_speed_scale);
 
-    void anim_play(float delta);
-
 	void anim_update(float delta);
 	void process_animation();
     void set_goal(const Variant& trajectory);

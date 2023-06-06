@@ -1,7 +1,7 @@
 #ifndef KD_TREE_H
 #define KD_TREE_H
 
-#include "core/vector.h"
+#include "core/templates/vector.h"
 
 struct _DefaultDistanceFuncClass {
     float operator()(float* fa, const Vector<float>& fv) const {

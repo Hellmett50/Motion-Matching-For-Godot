@@ -1,11 +1,12 @@
 #ifndef MM_DATA_TYPES_H
 #define MM_DATA_TYPES_H
 
-#include "core/vector.h"
-#include "core/ustring.h"
+#include "core/input/input_map.h"
+#include "core/math/quaternion.h"
 #include "core/math/vector3.h"
-#include "core/math/quat.h"
-#include "core/map.h"
+#include "core/string/ustring.h"
+#include "core/templates/hash_map.h"
+#include "core/templates/vector.h"
 
 namespace motion_matching {
 
@@ -26,8 +27,8 @@ public:
 
     Vector3 position;
     Vector3 velocity;
-    Quat quat;
-    Quat delta_quat;
+    Quaternion quat;
+    Quaternion delta_quat;
     Vector3 angular_velocity;
     int track_index;
 
@@ -62,7 +63,7 @@ public:
     float y_rotation_projection; // Project angle to [0, 1] for cost calculation
     TrajectoryPoint trajectory[trajectory_point_cnt];
     Vector<JointData> joint_data;
-    Quat quat;
+    Quaternion quat;
 };
 
 struct AnimData {
@@ -71,7 +72,7 @@ public:
     static inline int bone_cnt;
     static inline int root_bone_index;
     static inline int hip_bone_index;
-    static inline Map<String, int> bone_name_id_map;
+    static inline HashMap<String, int> bone_name_id_map;
     static  inline int dimension;
 
     PoseVector pose_vector;

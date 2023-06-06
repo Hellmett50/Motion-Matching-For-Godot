@@ -62,7 +62,6 @@ void MotionMatching::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_speed_scale"), &MotionMatching::get_speed_scale);
     ClassDB::bind_method(D_METHOD("set_speed_scale", "speed_scale"), &MotionMatching::set_speed_scale);
     ClassDB::bind_method(D_METHOD("process_animation"), &MotionMatching::process_animation);
-    ClassDB::bind_method(D_METHOD("anim_play", "delta"), &MotionMatching::anim_play);
     ClassDB::bind_method(D_METHOD("anim_update", "delta"), &MotionMatching::anim_update);
     ClassDB::bind_method(D_METHOD("set_goal", "trajectory"), &MotionMatching::set_goal);
     ClassDB::bind_method(D_METHOD("flip_flop", "animation", "animation_position"), &MotionMatching::flip_flop);
@@ -112,30 +111,30 @@ void MotionMatching::process_animation() {
         if(animation_length < anim_blend_time + sample_step) continue;
         print_line("Processing: " + iter->get());
         for(float key_time = sample_step; key_time < animation_length; key_time += sample_step) {
-            motion_matching::AnimData data;
+            Vector3 pose_loc, pose_scale;
+            Quaternion pose_quat;
+            motion_matching::AnimData anim_data;
             motion_matching::FeatureVector feature_vector;
-            data.pose_vector.anim_name = iter->get();
-            data.pose_vector.anim_time = key_time;
+            anim_data.pose_vector.anim_name = iter->get();
+            anim_data.pose_vector.anim_time = key_time;
             if(bones_to_track_cnt > 0) {
                 feature_vector.joint_data.resize(bones_to_track_cnt);
             }
             int track_cnt = animation->get_track_count();
             for(int track_index = 0; track_index < track_cnt; ++track_index) {
-				Vector3 pose_loc, pose_scale;
-                Quaternion pose_quat;
                 if(animation->track_get_type(track_index) == Animation::TYPE_POSITION_3D) {
-                    animation->position_track_interpolate(track_index, key_time, &pose_loc);
+                    pose_loc = animation->position_track_interpolate(track_index, key_time);
                     //continue;
 				} else if (animation->track_get_type(track_index) == Animation::TYPE_ROTATION_3D) {
-                    animation->rotation_track_interpolate(track_index, key_time, &pose_quat);
+                    pose_quat = animation->rotation_track_interpolate(track_index, key_time);
 				} else if (animation->track_get_type(track_index) == Animation::TYPE_SCALE_3D) {
-                    animation->scale_track_interpolate(track_index, key_time, &pose_scale);
+                    pose_scale = animation->scale_track_interpolate(track_index, key_time);
                 }
 				//WARN_PRINT("Track bone:" + animation->track_get_path(track_index).get_subname(0));
 
 				if(String(animation->track_get_path(track_index).get_subname(0)) != "Root") {
                     if(bones_to_track_cnt > 0) {
-                        set_joint_pose_track(animation, key_time, track_index); // Set bone pose to get global transform for joint matching data calculation
+                        set_joint_pose_track(animation, key_time, track_index); // Set bone pose to get global transform for joint matching anim_data calculation
                         int index = -1;
                         for(auto i = 0; i != bones_to_track.size(); ++i) {
                             String name = bones_to_track[i];
@@ -155,35 +154,31 @@ void MotionMatching::process_animation() {
 					//WARN_PRINT("Root bone:" + animation->track_get_path(track_index));
 					if(animation->track_get_type(track_index) == Animation::TYPE_POSITION_3D) {
                         for(auto i = 0; i < motion_matching::FeatureVector::trajectory_point_cnt; ++i) {
-                            Vector3 future_loc, future_loc_delta;
                             auto next_key_time = key_time + motion_matching::FeatureVector::intervals[i]; 
-                            animation->position_track_interpolate(track_index, next_key_time, &future_loc);
-                            animation->position_track_interpolate(track_index, next_key_time + time_delta, &future_loc_delta);
+                            Vector3 future_loc = animation->position_track_interpolate(track_index, next_key_time);
+                            Vector3 future_loc_delta = animation->position_track_interpolate(track_index, next_key_time + time_delta);
                             future_loc -= pose_loc; // offset from root bone
                             future_loc_delta = (future_loc_delta - pose_loc - future_loc).normalized(); // direction
 
                             feature_vector.trajectory[i].offset = std::forward<Vector3>(future_loc);
                             feature_vector.trajectory[i].direction = std::move(future_loc_delta);
                         }
-						Vector3 pose_loc_delta;
-						animation->position_track_interpolate(track_index, key_time + time_delta, &pose_loc_delta);
+						Vector3 pose_loc_delta = animation->position_track_interpolate(track_index, key_time + time_delta);
 						feature_vector.root_velocity = (pose_loc_delta - pose_loc) / time_delta;
 
 					} else if (animation->track_get_type(track_index) == Animation::TYPE_ROTATION_3D) {
 						for(auto i = 0; i < motion_matching::FeatureVector::trajectory_point_cnt; ++i) {
-                            Quaternion future_quat, future_quat_delta;
                             auto next_key_time = key_time + motion_matching::FeatureVector::intervals[i];
 							//WARN_PRINT("animation->track_get_type(track_index)" + animation->track_get_type(track_index));
-							animation->rotation_track_interpolate(track_index, next_key_time, &future_quat);
-							animation->rotation_track_interpolate(track_index, next_key_time + time_delta, &future_quat_delta);
+							Quaternion future_quat = animation->rotation_track_interpolate(track_index, next_key_time);
+							Quaternion future_quat_delta = animation->rotation_track_interpolate(track_index, next_key_time + time_delta);
 							future_quat -= pose_quat; // offset from root bone
 							future_quat_delta = (future_quat_delta - pose_quat - future_quat).normalized(); // direction
 
 							//feature_vector.trajectory[i].offset = std::forward<Quaternion>(future_quat);
 							//feature_vector.trajectory[i].direction = std::move(future_quat_delta);
                         }
-						Quaternion pose_quat_delta;
-						animation->rotation_track_interpolate(track_index, key_time + time_delta, &pose_quat_delta);
+						Quaternion pose_quat_delta = animation->rotation_track_interpolate(track_index, key_time + time_delta);
 						// Calculate rotation around y-axis
 						// Calculate rotational velocity
 						feature_vector.quat = pose_quat;
@@ -194,21 +189,19 @@ void MotionMatching::process_animation() {
 
 					} else if (animation->track_get_type(track_index) == Animation::TYPE_SCALE_3D) {
 						for (auto i = 0; i < motion_matching::FeatureVector::trajectory_point_cnt; ++i) {
-						    Vector3 future_scale, future_scale_delta;
 							auto next_key_time = key_time + motion_matching::FeatureVector::intervals[i];
-							animation->scale_track_interpolate(track_index, next_key_time, &future_scale);
-							animation->scale_track_interpolate(track_index, next_key_time + time_delta, &future_scale_delta);
+							Vector3 future_scale = animation->scale_track_interpolate(track_index, next_key_time);
+							Vector3 future_scale_delta = animation->scale_track_interpolate(track_index, next_key_time + time_delta);
 							feature_vector.trajectory[i].offset = std::forward<Vector3>(future_scale);
 							feature_vector.trajectory[i].direction = std::move(future_scale_delta);
 						}
-						Vector3 pose_scale_delta;
-						animation->scale_track_interpolate(track_index, key_time + time_delta, &pose_scale_delta);
+						Vector3 pose_scale_delta = animation->scale_track_interpolate(track_index, key_time + time_delta);
 					}
-					data.pose_vector.root_bone_track_index = track_index;
+					anim_data.pose_vector.root_bone_track_index = track_index;
                 } // root bone track
             }
 
-            // Calculate joint matching data
+            // Calculate joint matching anim_data
             if(bones_to_track_cnt > 0) {
                 for(auto i = 0; i < bones_to_track_cnt; ++i) {
                     String bone_name = bones_to_track[i];
@@ -233,13 +226,13 @@ void MotionMatching::process_animation() {
                     position -= feature_vector.joint_data[i].position;
                     auto temp_jd = feature_vector.joint_data[i];
                     temp_jd.velocity = std::move<Vector3>(position / time_delta);
-                    // temp_jd.position.rotate(Vector3(0, 1, 0), data.feature_vector.y_rotation);
-                    // temp_jd.velocity.rotate(Vector3(0, 1, 0), data.feature_vector.y_rotation);
+                    // temp_jd.position.rotate(Vector3(0, 1, 0), anim_data.feature_vector.y_rotation);
+                    // temp_jd.velocity.rotate(Vector3(0, 1, 0), anim_data.feature_vector.y_rotation);
                     feature_vector.joint_data.set(i, temp_jd);
                 }
             }
-            data.ignored = animation_length - key_time <= anim_blend_time + sample_step; // Ignore frames near the end
-            data.feature_vector = feature_vector_to_float_vector(feature_vector);
+            anim_data.ignored = animation_length - key_time <= anim_blend_time + sample_step; // Ignore frames near the end
+            anim_data.feature_vector = feature_vector_to_float_vector(feature_vector);
             /*test
 			HashMap<String, int>::Iterator it = motion_matching::AnimData::bone_name_id_map.begin();
 			HashMap<String, int>::Iterator end = motion_matching::AnimData::bone_name_id_map.end();
@@ -248,8 +241,8 @@ void MotionMatching::process_animation() {
 				print_line(motion_matching::AnimData::bone_name_id_map.begin()->key);
 				print_line(motion_matching::AnimData::bone_name_id_map.begin()->value);
 			}*/
-			//print_line(data.pose_vector.anim_time, data.feature_vector);
-			animation_array.push_back(data);
+			//print_line (anim_data.pose_vector.anim_time, anim_data.feature_vector);
+			animation_array.push_back(anim_data);
 		}
     }
     standard_deviations = new float[motion_matching::AnimData::dimension];
@@ -290,166 +283,6 @@ void MotionMatching::process_animation() {
 	print_line("Process complete.");
 }
 
-void MotionMatching::anim_play(float position) {
-	position *= speed_scale;
-    print_line(position);
-	Vector<motion_matching::JointData> result;
-
-	auto cfv = calculate_feature_vector(position);
-	print_line(cfv);
-
-	animation_index = find_best_match_index(cfv, position);
-	print_line(animation_index);
-
-	/*result.resize(motion_matching::AnimData::bone_cnt);
-	//print_line("position");
-	//print_line(position);
-	int track_cnt = pending_anim->get_track_count();
-	Vector3 jdposition;
-	Vector3 jdvelocity;
-	for (int track_index = 0; track_index < track_cnt; ++track_index) {
-		auto bone_name = pending_anim->track_get_path(track_index).get_subname(0);
-
-		auto bone_id = motion_matching::AnimData::bone_name_id_map.find(bone_name)->value;
-
-		motion_matching::JointData jd;
-
-		if (pending_anim->track_get_type(track_index) == Animation::TYPE_POSITION_3D) {
-			Vector3 delta_loc;
-			pending_anim->position_track_interpolate(track_index, position, &jdposition);
-			pending_anim->position_track_interpolate(track_index, position - time_delta, &delta_loc);
-			jdvelocity = std::move((jdposition - delta_loc) / time_delta);
-		} else if (pending_anim->track_get_type(track_index) == Animation::TYPE_ROTATION_3D) {
-			pending_anim->rotation_track_interpolate(track_index, position, &jd.quat);
-			pending_anim->rotation_track_interpolate(track_index, position - time_delta, &jd.delta_quat);
-			jd.quat = MMMath::minial_angle_quat(jd.quat);
-			jd.delta_quat = MMMath::minial_angle_quat(jd.delta_quat);
-			jd.angular_velocity = MMMath::quat_to_angular_velocity(jd.quat * jd.delta_quat);
-		} else if (pending_anim->track_get_type(track_index) == Animation::TYPE_SCALE_3D) {
-			Vector3 cur_scale, delta_scale;
-			pending_anim->scale_track_interpolate(track_index, position, &cur_scale);
-			pending_anim->scale_track_interpolate(track_index, position - time_delta, &delta_scale);
-		}
-		jd.position = jdposition;
-		jd.velocity = jdvelocity;
-		result.set(bone_id, jd);
-	}
-
-	set_skeleton_pose(result);
-	parent->set_rotation(Vector3(0.f, 0.f, 0.f));
-	parent->rotate_y(MMMath::get_y_rotation(result[motion_matching::AnimData::root_bone_index].quat));
-    */
-}
-
-/*
-void MotionMatching::anim_update(float delta) {
-	delta *= speed_scale;
-    Vector<motion_matching::JointData> pose_array;
-    if(activated) {
-		print_line("activated");
-		if(!stoping && pending && !should_blend) {
-			// stoping...
-            stoping = true;
-            cur_anim_time = pending_anim_pos;
-            should_blend = true;
-        }
-        if(stoping) {
-            cur_anim_time += delta;
-			print_line("stoping");
-			pose_array = calculate_pose_array(pending_anim, cur_anim_time);
-        }
-
-        else {
-			print_line("activated else");
-			float prev_frame_time = cur_anim_time;
-            cur_anim_time += delta;
-            int best_index = -1;
-            print_line("cur_anim_time ", cur_anim_time);
-            while(cur_anim_time > sample_step) {
-                //print_line("cur_anim_time ", cur_anim_time, " > ", "sample_step", sample_step);
-                ++ match_cnt;
-				//print_line("match_cnt ", match_cnt);
-				if(match_cnt == 5) {
-					//print_line("prev_frame_time");
-					//print_line(prev_frame_time);
-					auto cfv = calculate_feature_vector(prev_frame_time);
-                    //print_line("cfv", cfv);
-                    match_cnt = 0;
-                    best_index = find_best_match_index(cfv, delta);
-                }
-				print_line("best_index: ", best_index, "animation_index: ", animation_index);
-
-				if(best_index != -1) {
-                    should_blend = true;
-					blend_pose_offset(animation_index, prev_frame_time, best_index);
-					animation_index = best_index;
-                    cur_anim_time = 0.f;
-                }
-                else {
-                    cur_anim_time -= sample_step;
-                    ++animation_index;
-                }
-			}
-            cur_anim_name = animation_array[best_index].pose_vector.anim_name;
-            //cur_anim_time = animation_array[best_index].pose_vector.anim_time;
-			//print_line("animation_index :", animation_index, "cur_anim_time :", cur_anim_time);
-			pose_array = calculate_pose_array(animation_player->get_animation(cur_anim_name), cur_anim_time);
-		}
-    }
-    else if(pending) {
-        print_line("pending");
-        // starting...
-		pending = false;
-        activated = true;
-        stoping = false;
-        Vector<float> cfv;
-        for(int i = 0; i != motion_matching::AnimData::dimension; ++i) {
-            cfv.push_back(0.f);
-        }
-        int best_index = find_best_match_index(cfv, delta);
-        should_blend = true;
-		print_line("best_index: ", best_index);
-		blend_pose_offset(
-				pending_anim,
-				pending_anim_pos,
-				animation_player->get_animation(animation_array[best_index].pose_vector.anim_name),
-				animation_array[best_index].pose_vector.anim_time);
-
-		animation_index = best_index;
-        cur_anim_time = 0.f;
-        cur_anim_name = "";
-        match_cnt = 0;
-        cur_anim_name = animation_array[animation_index].pose_vector.anim_name;
-        pose_array = calculate_pose_array(animation_index, cur_anim_time);
-    }
-    else {
-        return;
-    }
-
-	if(should_blend) {
-		print_line("should_blend");
-		blend_time += delta;
-		blend_animation(pose_array, delta);
-		//print_line("blend_time ", blend_time, " - ", "anim_blend_time", anim_blend_time);
-		if (blend_time > anim_blend_time) {
-		    print_line("blend_time ", blend_time, " > ", "anim_blend_time", anim_blend_time, "reset blend_time");
-			blend_time = 0.f;
-			should_blend = false;
-			print_line("Blend finished");
-			if(pending) {
-				activated = false;
-				pending = false;
-				emit_signal("blend_complete");
-			}
-		}
-	}
-	//print_line("blend_time ", blend_time);
-
-	set_skeleton_pose(pose_array);
-	parent->set_rotation(Vector3(0.f, 0.f, 0.f));
-	parent->rotate_y(MMMath::get_y_rotation(pose_array[motion_matching::AnimData::root_bone_index].quat));
-}
-*/
 
 void MotionMatching::anim_update(float delta) {
 	delta *= speed_scale;
@@ -592,21 +425,16 @@ void MotionMatching::set_joint_pose_track(Ref<Animation> animation, float time, 
     auto elem = motion_matching::AnimData::bone_name_id_map.find(bone_name);
     _ASSERT(elem);
     int bone_id = elem->value;
-	//Transform transform;
-	//animation->transform_track_interpolate(track_index, time, &pose_loc, &pose_quat, &pose_scale);
 	if (animation->track_get_type(track_index) == Animation::TYPE_POSITION_3D) {
-	    Vector3 pose_loc;
-		animation->position_track_interpolate(track_index, time, &pose_loc);
+	    ;
+		Vector3 pose_loc = animation->position_track_interpolate(track_index, time);
 		skeleton->set_bone_pose_position(bone_id, pose_loc);
 	} else if (animation->track_get_type(track_index) == Animation::TYPE_ROTATION_3D) {
-	    Quaternion pose_quat;
-		animation->rotation_track_interpolate(track_index, time, &pose_quat);
+	    Quaternion pose_quat = animation->rotation_track_interpolate(track_index, time);
 		skeleton->set_bone_pose_rotation(bone_id, pose_quat);
 	} else if (animation->track_get_type(track_index) == Animation::TYPE_SCALE_3D) {
-		Vector3 pose_scale;
-		animation->scale_track_interpolate(track_index, time, &pose_scale);
+		Vector3 pose_scale = animation->scale_track_interpolate(track_index, time);
 		skeleton->set_bone_pose_scale(bone_id, pose_scale);
-		/* code */
 	}
 
 		//transform.basis = Basis(pose_quat).scaled(pose_scale);
@@ -790,20 +618,18 @@ Vector<motion_matching::JointData> MotionMatching::calculate_pose_array(Ref<Anim
 		motion_matching::JointData jd;
          
 		if (animation->track_get_type(track_index) == Animation::TYPE_POSITION_3D) {
-            Vector3 delta_loc;
-			animation->position_track_interpolate(track_index, position, &jdposition);
-			animation->position_track_interpolate(track_index, position - time_delta, &delta_loc);
+            jdposition = animation->position_track_interpolate(track_index, position);
+			Vector3 delta_loc = animation->position_track_interpolate(track_index, position - time_delta);
 			jdvelocity = std::move((jdposition - delta_loc) / time_delta);
 		} else if (animation->track_get_type(track_index) == Animation::TYPE_ROTATION_3D) {
-			animation->rotation_track_interpolate(track_index, position, &jd.quat);
-			animation->rotation_track_interpolate(track_index, position - time_delta, &jd.delta_quat);
+			jd.quat = animation->rotation_track_interpolate(track_index, position);
+			jd.delta_quat = animation->rotation_track_interpolate(track_index, position - time_delta);
 			jd.quat = MMMath::minial_angle_quat(jd.quat);
 			jd.delta_quat = MMMath::minial_angle_quat(jd.delta_quat);
 			jd.angular_velocity = MMMath::quat_to_angular_velocity(jd.quat * jd.delta_quat);
 		} else if (animation->track_get_type(track_index) == Animation::TYPE_SCALE_3D) {
-			Vector3 cur_scale, delta_scale;
-			animation->scale_track_interpolate(track_index, position, &cur_scale);
-			animation->scale_track_interpolate(track_index, position - time_delta, &delta_scale);
+			Vector3 cur_scale = animation->scale_track_interpolate(track_index, position);
+			Vector3 delta_scale = animation->scale_track_interpolate(track_index, position - time_delta);
         }
         jd.position = jdposition;
 		jd.velocity = jdvelocity;

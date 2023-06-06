@@ -23,7 +23,7 @@ float MMMath::angle_lerp(float la, float ra, float ratio) noexcept {
     return la > Math_TAU ? la - Math_TAU : la;
 }
 
-float MMMath::get_y_rotation(const Quat& quat) { 
+float MMMath::get_y_rotation(const Quaternion &quat) { 
     float result = acos(CLAMP(quat.w, -1.f, 1.f));
     auto axis = Vector3(quat.x, quat.y, quat.z) / sin(result);
     result *= 2;
@@ -43,7 +43,7 @@ float MMMath::delta_angle(float angle, float dangle) {
     return result;
 }
 
-Vector3 MMMath::quat_to_angular_velocity(const Quat& quat) {
+Vector3 MMMath::quat_to_angular_velocity(const Quaternion &quat) {
     if(Math::is_equal_approx(fabs(quat.w), 1.)) return Vector3(0.f, 0.f, 0.f); // No rotation
     float angle = acos(CLAMP(quat.w, -1.f, 1.f));
     Vector3 axis = Vector3(quat.x, quat.y, quat.z);
@@ -52,15 +52,15 @@ Vector3 MMMath::quat_to_angular_velocity(const Quat& quat) {
     return axis * angle;
 }
 
-Quat MMMath::quat_from_angular_velocity(const Vector3& vec) {
+Quaternion MMMath::quat_from_angular_velocity(const Vector3 &vec) {
     float angle = vec.length();
     angle *= .5f;
     auto axis = vec.normalized();
     axis *= sin(angle);
-    return Quat(axis.x, axis.y, axis.z, cos(angle));
+	return Quaternion(axis.x, axis.y, axis.z, cos(angle));
 }
 
-void MMMath::simple_spring_damper_implicit_quat(Quat& x, Vector3& v, const Quat& goal, float halflife, float delta) {
+void MMMath::simple_spring_damper_implicit_quat(Quaternion &x, Vector3 &v, const Quaternion &goal, float halflife, float delta) {
     float y = halflife_to_damping(halflife) / 2.f;
     Vector3 j0 = quat_to_angular_velocity(x * goal.inverse());
     Vector3 j1 = v + j0 * y;
@@ -71,16 +71,16 @@ void MMMath::simple_spring_damper_implicit_quat(Quat& x, Vector3& v, const Quat&
 }
 
 void MMMath::inertialize_update_quat(
-    Quat& out_quat, Vector3& out_velocity, 
-    Quat& off_quat, Vector3& off_velocity, 
-    const Quat& in_quat, const Vector3& in_velocity, 
+    Quaternion &out_quat, Vector3 &out_velocity, 
+    Quaternion &off_quat, Vector3 &off_velocity, 
+    const Quaternion &in_quat, const Vector3 &in_velocity, 
     float halflife, float delta, float eydt) {
     decay_spring_damper_implicit_quat(off_quat, off_velocity, halflife, delta, eydt);
     out_quat = off_quat * in_quat;
     out_velocity = in_velocity + off_velocity;
 }
 
-void MMMath::decay_spring_damper_implicit_quat(Quat& quat, Vector3& velocity, float halflife, float delta, float eydt) {
+void MMMath::decay_spring_damper_implicit_quat(Quaternion &quat, Vector3 &velocity, float halflife, float delta, float eydt) {
     float y = halflife_to_damping(halflife) / 2.0f;	
     Vector3 j0 = quat_to_angular_velocity(quat);
     Vector3 j1 = velocity + j0 * y;
@@ -95,7 +95,7 @@ void MMMath::decay_spring_damper_implicit_quat(Quat& quat, Vector3& velocity, fl
 //     return a * t * t_forth_power + b * t_forth_power + c * t * t_squared + a0 * t_squared * .5f + v0 * t + x0;
 // }
 
-float MMMath::deviation(const Vector<float>& data) {
+float MMMath::deviation(const Vector<float> &data) {
     return deviation(data.ptr(), data.size());
 }
 
@@ -114,12 +114,12 @@ float MMMath::deviation(const float* data, int size) {
     return deviation / (size - 1);
 }
 
-float MMMath::standard_deviation(const Vector<float>& data) {
+float MMMath::standard_deviation(const Vector<float> &data) {
     float d = deviation(data);
     if(d == 0.f) return d;
     return d * fast_rsqrt(d);
 }
 
-Quat MMMath::minial_angle_quat(const Quat& quat) {
+Quaternion MMMath::minial_angle_quat(const Quaternion &quat) {
     return quat.w > 0 ? quat : quat * -1.f;
 }

@@ -1,7 +1,7 @@
 #ifndef MM_AABB_H
 #define MM_AABB_H
 
-#include "core/vector.h"
+#include "core/templates/vector.h"
 
 class MMAABB {
 

@@ -1,9 +1,9 @@
 #ifndef MM_SPRING_DAMPER_H
 #define MM_SPRING_DAMPER_H
 
-#include "core/class_db.h"
+#include "core/object/class_db.h"
 #include "scene/main/node.h"
-#include "core/vector.h"
+#include "core/templates/vector.h"
 #include "mm_math/mm_data_types.h"
 
 class MMSpringDamper final : public Node {
